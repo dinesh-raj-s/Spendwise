@@ -121,6 +121,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .who-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;}
 .tag{font-size:10px;background:var(--surface2);padding:1px 5px;border-radius:4px;color:var(--text2);}
 .tag-green{background:#dcfce7;color:#166534;}
+.retry-sync{background:none;border:1px solid #f59e0b;border-radius:4px;color:#92400e;font-size:10px;font-weight:500;padding:2px 6px;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:3px;}
+.retry-sync i{font-size:11px;}
+.retry-sync:disabled{opacity:0.6;cursor:not-allowed;}
 .exp-right{text-align:right;flex-shrink:0;}
 .exp-amt{font-size:14px;font-weight:500;}
 .exp-del{background:none;border:none;cursor:pointer;color:var(--text3);padding:5px;font-size:17px;line-height:1;}
@@ -769,8 +772,10 @@ function renderHistory() {
     const uid=typeof e.userId==='number'?e.userId:0;
     const uCol=uid===0?'var(--user1)':'var(--user2)';
     const uName=appData.users[uid]?.name||'?';
-    const syncTag = e.synced ? '<span class="tag tag-green">Sheets ✓</span>' : '';
-    return `<div class="exp-item">
+    const syncTag = e.synced
+      ? '<span class="tag tag-green">Sheets ✓</span>'
+      : appData.sheetsUrl ? `<button class="retry-sync" onclick="retrySync('${e.id}')" title="Retry sync to Sheets"><i class="ti ti-refresh"></i> Sync</button>` : '';
+    return `<div class="exp-item" id="expitem-${e.id}">
       <div class="exp-icon" style="background:${cat.bg}"><i class="ti ${cat.icon}" style="color:${cat.color}"></i></div>
       <div class="exp-info">
         <div class="exp-desc">${e.desc}</div>
@@ -800,6 +805,22 @@ window.setFilter = function(f) { histFilter=f; renderHistory(); };
 window.deleteExp = function(id) {
   appData.expenses=(appData.expenses||[]).filter(e=>e.id!==id);
   saveToFirebase(appData); showToast('Deleted'); renderHistory();
+};
+window.retrySync = async function(id) {
+  const exp = (appData.expenses||[]).find(e=>e.id===id);
+  if (!exp) return;
+  const btn = document.querySelector(`#expitem-${id} .retry-sync`);
+  if (btn) { btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Syncing…'; btn.disabled = true; }
+  const ok = await syncToSheets(exp);
+  if (ok) {
+    exp.synced = true;
+    saveToFirebase(appData);
+    showToast('Synced to Sheets ✓');
+    renderHistory();
+  } else {
+    showToast('Sync failed — try again');
+    if (btn) { btn.innerHTML = '<i class="ti ti-refresh"></i> Sync'; btn.disabled = false; }
+  }
 };
 
 // ── INSIGHTS ──
